@@ -49,17 +49,33 @@ class pan_tilt_motor:
         # create a motor
         self.servoKit = ServoKit(4)
         self.motor_step = 5
-        
-    def step(self,motor=0,direction=0):
+            
+    def step(self,motor_id=0,direction=0):
         
         # motor: 0 for pan and 1 for tilt
-        assert motor in [0,1]
+        assert motor_id in [0,1]
         
         # direction: -1 or 1
         assert direction in [-1,1]
         
-        self.servoKit.setAngle(motor, self.servoKit.getAngle(motor) 
+        self.servoKit.setAngle(motor_id, self.servoKit.getAngle(motor_id) 
                                - direction*self.motor_step)
+    
+    def setAngle(self,motor_id,angle=90):
+        # set angle
+        # motor: 0 for pan and 1 for tilt
+        assert motor_id in [0,1]
+        if angle<0:
+            angle = 0
+        elif angle > 180:
+            angle = 180
+        self.servoKit.setAngle(motor_id, angle)     
+    
+    def setAngles(self,angles=(90,90)):   
+        assert isinstance(angles,tuple) and len(angles)==2
+        self.setAngle(0,angles[0])
+        self.setAngle(1,angles[1])
+    
 
 def parseKey(k, motor, camera, uploader, attr:ImageCapAttr):#image_dir='/home/pi/Pictures/'):
     # motor is pan_tilt_motor
@@ -149,7 +165,7 @@ def main():
     # camera.start_preview()
     
     # Start video stream in a separate thread
-    threading.Thread(target=run_flask_app, daemon=True).start()
+    # threading.Thread(target=run_flask_app, daemon=True).start()
     
     # key
     k = ''
@@ -166,11 +182,25 @@ def main():
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, filedescriptors)
             break
         
-    # camera.stop_preview()
 
+def debug():
+    date = datetime.now().strftime("%Y-%m-%d")
+    attr = ImageCapAttr(stream=True, save=True,date=date,resolution=(1920,1080),upload=True)
+    
+    camera.resolution = attr.resolution
+    # initialize pan_tilt_motor
+    motor = pan_tilt_motor()
+    sleep(2)
+    actions = [(90,100),(30,90),(150,90),(90,30),(90,100)]
+    
+    
+    for i in range(len(actions)):
+        motor.setAngles(actions[i])
+        sleep(2)
   
 if __name__ == "__main__":
-    main()    
+    #main()    
+    debug()
 
 
     
