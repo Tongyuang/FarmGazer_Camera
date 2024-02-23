@@ -12,11 +12,16 @@ from flask import Flask, Response
 import threading
 import io
 
+from image_description import get_desc_by_img_url,post_comment
+
+img_blob_prefix ="https://farmgazerstorage.blob.core.windows.net/images/"
+img_blob_suffix = "?sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2024-03-16T08:07:06Z&st=2024-02-09T02:07:06Z&spr=https&sig=flmsaOix%2Biud3OTwOB20SI4MMx3bCRV0BDOpCgwcJls%3D"
+
 app = Flask(__name__)
 
 
 global image_ctr
-image_ctr = 0
+image_ctr = 16
 
 global stream_cur_frame_bytes
 stream_cur_frame_bytes = None
@@ -31,9 +36,9 @@ class ImageCapAttr:
     defaults = {
         'stream': False,
         'save': True,
-        'save_dir': "./data",
-        'farm': "NelsonFarm",
-        'field': "Pea01",
+        'save_dir': "/home/pi/code/FarmGazer_Camera/data",
+        'farm': "Kevinfarm",
+        'field': "Plant01",
         'date': "2024-02-08",
         'resolution': (1920, 1080),
         'upload': False
@@ -115,7 +120,6 @@ def parseKey(k, motor, camera, uploader, attr:ImageCapAttr):#image_dir='/home/pi
             if attr.upload:
                 print('uploading to default storage...')
                 uploader.upload(image_pth,blob_name=image_name)
-            # upload to blob
                 print('Done')
         else:
             # not save, put it into a numpy array
@@ -161,11 +165,8 @@ def main():
     # uploader
     uploader = blob_uploader()
     
-    # # start preview
-    # camera.start_preview()
-    
     # Start video stream in a separate thread
-    # threading.Thread(target=run_flask_app, daemon=True).start()
+    threading.Thread(target=run_flask_app, daemon=True).start()
     
     # key
     k = ''
@@ -183,20 +184,40 @@ def main():
             break
         
 
-def debug():
+def debug(farmname='debug'):
     date = datetime.now().strftime("%Y-%m-%d")
-    attr = ImageCapAttr(stream=True, save=True,date=date,resolution=(1920,1080),upload=True)
+    attr = ImageCapAttr(farm=farmname,stream=True, save=True,date=date,resolution=(1920,1080),upload=True)
     
     camera.resolution = attr.resolution
     # initialize pan_tilt_motor
     motor = pan_tilt_motor()
     sleep(2)
-    actions = [(90,100),(30,90),(150,90),(90,30),(90,100)]
+    actions = [(90,100),(30,90),(150,90),(90,30)]
     
-    
+    uploader = blob_uploader()
+    img_desc = None
     for i in range(len(actions)):
+        
         motor.setAngles(actions[i])
+        image_name = "temp_{}.jpg".format(i)
         sleep(2)
+        # set image path
+        image_pth = os.path.join(attr.save_dir,image_name)
+        # take picture
+        camera.capture(image_pth)
+        # upload
+        print('uploading to default storage...')
+        blob_name ='{}_{}_{}_{}.jpg'.format(attr.farm,attr.field,attr.date,i)
+        uploader.upload(image_pth,blob_name=blob_name)
+        if img_desc is None:
+            print('Calling OpenAI API...')
+            img_url = img_blob_prefix + blob_name + img_blob_suffix
+            img_desc = get_desc_by_img_url(url_in = img_url)
+            print(img_desc)
+            print('Uploading comments to blob storage')
+            post_comment(image_id = blob_name, user_name = 'OPENAI_DESC', comment_text=img_desc)
+        print('Done')
+        
   
 if __name__ == "__main__":
     #main()    
